@@ -11,7 +11,7 @@ except ImportError:
     sys.exit(1)
 
 # import influx to csv library
-sys.path.insert(0, '../download_from_influx/')
+sys.path.insert(0, '../influx_to_csv/')
 from influx_to_csv import generate_csv
 
 # check for influxdb config
