@@ -1,3 +1,6 @@
+# Our special-purpose ignores
+raw_data/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
