@@ -5,7 +5,7 @@ Runs a query on an InfluxDB server and writes the results to a comma separated
 value file (CSV).
 
 
-# To use
+## To use
 
 This is meant to be used as a python library. To do so:
 
@@ -20,7 +20,7 @@ from influx_to_csv import generate_csv
 ```
 
 
-# To test
+## To test
 
 First, ensure that a config file for the InfluxDB instance has been created
 (see [../README.md](../README.md))

@@ -4,7 +4,7 @@ influx-query
 Tools to query and download data from an InfluxDB instance.
 
 
-# Setup
+## Setup
 
 A configuration file for the InfluxDB instance is needed. The file should be
 created as follows:
