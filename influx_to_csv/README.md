@@ -14,7 +14,7 @@ import sys
 
 # import influx to csv library
 influx_to_csv_path = '../influx_to_csv/'
-sys.path.insert(0, influx_to_csv_path)
+sys.path.append(influx_to_csv_path)
 from influx_to_csv import generate_csv
 
 ```
@@ -32,7 +32,7 @@ Writing file: raw_data/minutelyRSSI-c098e57000cd.csv
 Writing file: raw_data/minutelyRSSI-c098e57000ce.csv
 Finished
 
-$ cat raw_data/minutelyRSSI-c098e57000cd.csv 
+$ cat raw_data/minutelyRSSI-c098e57000cd.csv
 #time,MEAN(value) from rssi
 2017-04-02T04:00:00Z,-79.13333333333334
 2017-04-02T04:01:00Z,-78.28947368421052
