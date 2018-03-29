@@ -34,7 +34,7 @@ except ImportError:
 
 
 ## run an influxdb query and write the results to a csv file
-def generate_csv (config, select_operation, from_measurement, where_tag_list, group_list, begin_time, end_time, out_filename):
+def generate_csv (config, select_operation, measurement_list, tag_list, begin_time, end_time, group_list, out_filename):
 
     # convert times influxDB time strings in UTC
     begin_time_statement = arrow.get(begin_time, 'MM-DD-YYYY HH:mm:ss ZZZ').to('UTC').format('YYYY-MM-DD HH:mm:ss')
@@ -49,34 +49,31 @@ def generate_csv (config, select_operation, from_measurement, where_tag_list, gr
     client = InfluxDBClient(config['host'], config['port'], config['username'],
             config['password'], config['database'], ssl=True, verify_ssl=True)
 
-    # measurement to take the `value` key from
-    if '"' not in from_measurement:
-        from_statement = '"' + from_measurement + '"'
-    else:
-        from_statement = from_measurement
+    # comma separated list of measurements to take the `value` key from
+    measurement_statement = ','.join(['"' + measurement + '"' for measurement in measurement_list])
 
     # determine appropriate tags for the WHERE clause based on tag dict
-    where_statement = ''
+    tag_statement = ''
     first_name = True
-    for tag_name in sorted(where_tag_list.keys()):
+    for tag_name in sorted(tag_list.keys()):
 
         # put an AND between each set of tags
-        if not where_tag_list[tag_name]:
+        if not tag_list[tag_name]:
             continue
         if not first_name:
-            where_statement += ' AND '
+            tag_statement += ' AND '
         first_name = False
 
         # tag values in parentheses with ORs between them. Note that the tag
         # value MUST use single quotes
-        where_statement += '('
+        tag_statement += '('
         first_value = True
-        for tag_value in where_tag_list[tag_name]:
+        for tag_value in tag_list[tag_name]:
             if not first_value:
-                where_statement += ' OR '
+                tag_statement += ' OR '
             first_value = False
-            where_statement += '"' + tag_name + '" = \'' + tag_value + '\''
-        where_statement += ')'
+            tag_statement += '"' + tag_name + '" = \'' + tag_value + '\''
+        tag_statement += ')'
 
     # comma separated list of tags to group by
     group_statements = []
@@ -91,15 +88,22 @@ def generate_csv (config, select_operation, from_measurement, where_tag_list, gr
 
     # create query and execute it
     query = "SELECT {} FROM {} WHERE {} AND (time >= '{}' AND time < '{}') GROUP BY {}"
-    query = query.format(select_operation, from_statement, where_statement, begin_time_statement, end_time_statement, group_statement)
+    query = query.format(select_operation, measurement_statement, tag_statement, begin_time_statement, end_time_statement, group_statement)
     print("Running query: " + query)
-    result = client.query(query)
+    # setting chunked=True here allows us to retrieve more than the
+    # max-row-limit of points in a single query. However, they get
+    # returned as separate ResultSet's in the result, so we need to
+    # determine if there are multiples, and merge them
+    result = client.query(query, chunked=True)
 
     # generate a CSV file out of this
     # here we're going to make some assumptions to make our lives easier
     #   1) there is only one FROM measurement type
     #   2) there is at least one GROUP BY tag
     #   3) it's fine to append the GROUP BY tag values to the output filename
+    if len(measurement_list) != 1:
+        print("Cannot create CSV out of multiple measurements")
+    prev_filename = None
     for series in result.raw['series']:
         csv_filename = out_filename + '.csv'
         if 'tags' in series.keys():
@@ -107,23 +111,33 @@ def generate_csv (config, select_operation, from_measurement, where_tag_list, gr
             id = id.replace(' ', '_')
             csv_filename = out_filename + '-' + id + '.csv'
 
-        print("Writing file: " + csv_filename)
-        with open(csv_filename, 'w') as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerow(['#time', select_operation + ' from ' + series['name']])
-            writer.writerows(series['values'])
+        if prev_filename == csv_filename:
+            print("Continuing file: " + csv_filename)
+            with open(csv_filename, 'a') as csvfile:
+                writer = csv.writer(csvfile)
+                # do not write header, since we are appending
+                writer.writerows(series['values'])
+        else:
+            print("Writing file: " + csv_filename)
+            prev_filename = csv_filename
+            with open(csv_filename, 'w') as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(['#time', select_operation + ' from ' + series['name']])
+                writer.writerows(series['values'])
 
     print("Finished")
 
 
 # if not a library, run an example query from influx
 if __name__ == "__main__":
+    # download powerblade sequence number data, only takes a second or two to run
+
     # check for influxdb config
     if not os.path.isfile('../confs/influxdb.conf'):
         print('Error: need a valid influxdb.conf file')
         sys.exit(1)
 
-    # hack to read sectionless ini files from: 
+    # hack to read sectionless ini files from:
     #   http://stackoverflow.com/a/25493615/4422122
     influxdb_config = configparser.ConfigParser()
     with open('../confs/influxdb.conf', 'r') as f:
@@ -132,9 +146,9 @@ if __name__ == "__main__":
     config = influxdb_config['global']
 
     # configurations
-    select_operation = 'value'
-    from_measurement = 'sequence_number'
-    where_tag_list = {
+    select_operation = '"value"'
+    measurement_list = ['sequence_number']
+    tag_list = {
         'location': ['802 Fuller'],
         'device_class': ['PowerBlade', 'BLEES'],
         'device_id': ['c098e57000cd', 'c098e57000ce'],
@@ -144,6 +158,5 @@ if __name__ == "__main__":
     end_time = '03-21-2017 00:00:00 US/Eastern'
     out_filename = 'raw_data/sequenceNumber'
 
-    # download PowerBlade and BLEES sequence number data, only takes a second or two to run
-    generate_csv(config, select_operation, from_measurement, where_tag_list, group_list, begin_time, end_time, out_filename)
+    generate_csv(config, select_operation, measurement_list, tag_list, begin_time, end_time, group_list, out_filename)
 

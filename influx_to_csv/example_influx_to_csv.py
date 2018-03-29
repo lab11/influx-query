@@ -29,7 +29,7 @@ config = influxdb_config['global']
 
 # query for average RSSI values
 select_operation = 'MEAN(value)'
-from_measurement = 'rssi'
+from_measurement = ['rssi']
 where_tag_list = {
     'device_class': ['BLEPacket'],
     'device_id': ['c098e57000cd', 'c098e57000ce'],
@@ -38,5 +38,5 @@ group_list = ['device_id', 'time(1m) fill(0)']
 begin_time = '04-02-2017 00:00:00 US/Eastern'
 end_time = '04-02-2017 01:00:00 US/Eastern'
 out_filename = 'raw_data/minutelyRSSI'
-generate_csv(config, select_operation, from_measurement, where_tag_list, group_list, begin_time, end_time, out_filename)
+generate_csv(config, select_operation, from_measurement, where_tag_list, begin_time, end_time, group_list, out_filename)
 
