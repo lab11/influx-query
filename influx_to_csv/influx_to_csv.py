@@ -114,7 +114,9 @@ def generate_csv (config, select_operation, measurement_list, tag_list, begin_ti
         group_str = '-'.join(group_values)
         csv_filename = out_filename + '-' + group_str + '.csv'
         print("Writing file: " + csv_filename)
-        merged_dfs[group].to_csv(csv_filename)
+        with open(csv_filename, 'w') as f:
+            f.write('# ' + query + '\n')
+            merged_dfs[group].to_csv(f)
 
     print("Finished")
 
