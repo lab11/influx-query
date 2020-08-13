@@ -10,9 +10,10 @@ import os
 import re
 import sys
 import time
+import pandas as pd
 
 try:
-    from influxdb import InfluxDBClient
+    from influxdb import DataFrameClient
 except ImportError:
     print('Could not import influxdb library')
     print('sudo pip3 install influxdb')
@@ -46,7 +47,7 @@ def generate_csv (config, select_operation, measurement_list, tag_list, begin_ti
         os.makedirs(out_dir, exist_ok=True)
 
     # connect to influx database
-    client = InfluxDBClient(config['host'], config['port'], config['username'],
+    client = DataFrameClient(config['host'], config['port'], config['username'],
             config['password'], config['database'], ssl=True, verify_ssl=True)
 
     # comma separated list of measurements to take the `value` key from
@@ -94,36 +95,26 @@ def generate_csv (config, select_operation, measurement_list, tag_list, begin_ti
     # max-row-limit of points in a single query. However, they get
     # returned as separate ResultSet's in the result, so we need to
     # determine if there are multiples, and merge them
-    result = client.query(query, chunked=True)
+    result = client.query(query=query)
+    merged_dfs = {}
+    for key in result:
+        renamed = result[key].rename(columns={result[key].columns[0]: key[0]})
+        if key[1] not in merged_dfs:
+            merged_dfs[key[1]] = renamed
+        else:
+            merged_dfs[key[1]] = merged_dfs[key[1]].join(renamed)
 
     # generate a CSV file out of this
     # here we're going to make some assumptions to make our lives easier
     #   1) there is only one FROM measurement type
     #   2) there is at least one GROUP BY tag
     #   3) it's fine to append the GROUP BY tag values to the output filename
-    if len(measurement_list) != 1:
-        print("Cannot create CSV out of multiple measurements")
-    prev_filename = None
-    for series in result.raw['series']:
-        csv_filename = out_filename + '.csv'
-        if 'tags' in series.keys():
-            id = '-'.join([series['tags'][key] for key in sorted(series['tags'].keys())])
-            id = id.replace(' ', '_')
-            csv_filename = out_filename + '-' + id + '.csv'
-
-        if prev_filename == csv_filename:
-            print("Continuing file: " + csv_filename)
-            with open(csv_filename, 'a') as csvfile:
-                writer = csv.writer(csvfile)
-                # do not write header, since we are appending
-                writer.writerows(series['values'])
-        else:
-            print("Writing file: " + csv_filename)
-            prev_filename = csv_filename
-            with open(csv_filename, 'w') as csvfile:
-                writer = csv.writer(csvfile)
-                writer.writerow(['#time', select_operation + ' from ' + series['name']])
-                writer.writerows(series['values'])
+    for group in merged_dfs:
+        group_values = [x[-1] for x in group]
+        group_str = '-'.join(group_values)
+        csv_filename = out_filename + '-' + group_str + '.csv'
+        print("Writing file: " + csv_filename)
+        merged_dfs[group].to_csv(csv_filename)
 
     print("Finished")
 
